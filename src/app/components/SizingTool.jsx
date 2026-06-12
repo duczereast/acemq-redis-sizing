@@ -371,6 +371,221 @@ function ReviewDbTable({ rows, title }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BRANDED REPORT (shown on done page + matches email style)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReportSectionBanner({ num, title }) {
+  return (
+    <div style={{ backgroundColor: '#FF6600', padding: '0.9rem 1.4rem', marginTop: '2.8rem' }}>
+      <p style={{ margin: 0, fontSize: '1.1rem', color: '#fff', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {num}.&nbsp;&nbsp;{title}
+      </p>
+    </div>
+  );
+}
+
+function ReportDbTable({ rows, haLabel }) {
+  if (!rows.length) {
+    return <p style={{ fontSize: '1.3rem', color: '#999', margin: '1rem 0 1.6rem' }}>No databases entered for this environment.</p>;
+  }
+  const total = rows.reduce((s, r) => s + (parseFloat(r.memory) || 0), 0);
+  return (
+    <div style={{ overflowX: 'auto', marginBottom: '0.4rem' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1.3rem', minWidth: '50rem' }}>
+        <thead>
+          <tr>
+            {['Database Name', 'Region / Datacenter', 'Peak Memory (GB)', 'Throughput (ops/sec)', haLabel].map((h) => (
+              <th key={h} style={{ background: '#1a1a1a', color: '#fff', textAlign: 'left', padding: '0.8rem 1rem', fontWeight: '600', fontSize: '1.2rem', whiteSpace: 'nowrap' }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+              <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a' }}>{r.name || '—'}</td>
+              <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a' }}>{r.region || '—'}</td>
+              <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a', fontWeight: '600' }}>{r.memory || '—'}</td>
+              <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a' }}>{r.throughput || '—'}</td>
+              <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a' }}>{r.ha || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ background: '#fff8f0' }}>
+            <td colSpan="2" style={{ padding: '0.7rem 1rem', color: '#FF6600', fontWeight: '600', fontSize: '1.2rem' }}>Total Peak Memory</td>
+            <td style={{ padding: '0.7rem 1rem', color: '#FF6600', fontWeight: '700', fontSize: '1.3rem' }}>{total} GB</td>
+            <td colSpan="2" />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function ReportPersistenceTable({ prod, nonprod }) {
+  const entries = [
+    ...Object.entries(prod || {}).filter(([, v]) => v).map(([k, v]) => ({ group: 'Production', env: k, type: v })),
+    ...Object.entries(nonprod || {}).filter(([, v]) => v).map(([k, v]) => ({ group: 'Non-Production', env: k, type: v })),
+  ];
+  if (!entries.length) {
+    return <p style={{ fontSize: '1.3rem', color: '#999', margin: '1rem 0 1.6rem' }}>No persistence requirements specified.</p>;
+  }
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1.3rem', marginBottom: '0.4rem' }}>
+      <thead>
+        <tr>
+          {['Group', 'Environment', 'Persistence Type'].map((h) => (
+            <th key={h} style={{ background: '#1a1a1a', color: '#fff', textAlign: 'left', padding: '0.8rem 1rem', fontWeight: '600', fontSize: '1.2rem' }}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e, i) => (
+          <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+            <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#555', fontSize: '1.2rem' }}>{e.group}</td>
+            <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a' }}>{e.env}</td>
+            <td style={{ padding: '0.8rem 1rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a' }}>{e.type}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function SizingReport({ contact, prodRows, nonprodRows, prodPersistence, nonprodPersistence, notes }) {
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const name = [contact.first, contact.last].filter(Boolean).join(' ');
+  const filledProd = prodRows.filter((r) => r.memory || r.name);
+  const filledNonprod = nonprodRows.filter((r) => r.memory || r.name);
+
+  const detailRows = [
+    { l: 'Title', v: 'Redis Enterprise Sizing Report' },
+    { l: 'Prepared By', v: 'AceMQ — Redis Subject-Matter Engineering' },
+    { l: 'Contact', v: name },
+    { l: 'Company', v: contact.company, bold: true },
+    { l: 'Role', v: contact.role || '—' },
+    { l: 'Email', v: contact.email },
+    { l: 'Phone', v: contact.phone || '—' },
+    { l: 'Date Submitted', v: date },
+    { l: 'Classification', v: 'Confidential — Prepared by AceMQ' },
+  ];
+
+  return (
+    <div id="sizing-report" style={{ marginTop: '3.2rem' }}>
+      <div className="no-print flex items-center justify-between mb-[1.8rem]">
+        <p className="text-[1.2rem] font-[400] tracking-[0.12em] uppercase text-[#999]">Your Sizing Report</p>
+        <button
+          onClick={() => window.print()}
+          className="border border-[rgba(0,0,0,0.14)] rounded-[3rem] px-[2rem] py-[0.9rem] text-[1.3rem] text-[#666] hover:border-[#FF6600] hover:text-[#FF6600] transition-all cursor-pointer bg-transparent"
+        >
+          ↓ Print / Save PDF
+        </button>
+      </div>
+
+      <div
+        id="print-report"
+        style={{
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,0.09)',
+          borderRadius: '1.2rem',
+          boxShadow: '0 2px 24px rgba(0,0,0,0.06)',
+          padding: 'clamp(2.4rem,4vw,4.8rem) clamp(2rem,5vw,5.6rem)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Small logo top-right */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2.8rem' }}>
+          <img src="/redesign/logo.png" alt="AceMQ" style={{ height: '2rem' }} />
+        </div>
+
+        {/* Large logo */}
+        <img src="/redesign/logo.png" alt="AceMQ" style={{ height: '4rem', marginBottom: '2rem', display: 'block' }} />
+
+        {/* Orange rule */}
+        <div style={{ height: '2px', background: '#FF6600', marginBottom: '2rem' }} />
+
+        <p style={{ color: '#FF6600', fontSize: '1.1rem', fontWeight: '700', letterSpacing: '0.14em', textTransform: 'uppercase', margin: '0 0 0.6rem' }}>
+          SIZING REFERENCE
+        </p>
+
+        <h1 style={{ fontSize: '2.8rem', fontWeight: '700', color: '#000', lineHeight: '1.25', margin: '0 0 0.5rem' }}>
+          Redis Enterprise Sizing Report
+        </h1>
+
+        <p style={{ fontSize: '1.4rem', color: '#666', margin: '0 0 2.4rem' }}>
+          {contact.company} · Prepared by AceMQ · {date}
+        </p>
+
+        {/* Orange breadcrumb banner */}
+        <div style={{ background: '#FF6600', padding: '1rem 1.4rem', marginBottom: '2.8rem' }}>
+          <p style={{ margin: 0, fontSize: '1.1rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <span style={{ color: 'rgba(255,255,255,0.65)' }}>REDIS ENTERPRISE SIZING &nbsp;·&nbsp; </span>
+            <strong style={{ color: '#fff', fontWeight: '700' }}>SUBMITTED REPORT</strong>
+            <span style={{ color: 'rgba(255,255,255,0.65)' }}> &nbsp;·&nbsp; Contact · Production · Non-Production · Persistence</span>
+          </p>
+        </div>
+
+        {/* Submission details table */}
+        <h2 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#000', margin: '0 0 1rem' }}>Submission Details</h2>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1.3rem', marginBottom: '2.8rem' }}>
+          <thead>
+            <tr>
+              <th style={{ background: '#1a1a1a', color: '#fff', textAlign: 'left', padding: '0.9rem 1.2rem', fontWeight: '600', width: '30%' }}>Document</th>
+              <th style={{ background: '#1a1a1a', color: '#fff', textAlign: 'left', padding: '0.9rem 1.2rem', fontWeight: '600' }}>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detailRows.map((row, i) => (
+              <tr key={row.l} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                <td style={{ padding: '0.8rem 1.2rem', borderBottom: '1px solid #ebebeb', color: '#555' }}>{row.l}</td>
+                <td style={{ padding: '0.8rem 1.2rem', borderBottom: '1px solid #ebebeb', color: '#1a1a1a', fontWeight: row.bold ? '600' : '400' }}>{row.v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Production */}
+        <ReportSectionBanner num={1} title="PRODUCTION DATABASES" />
+        <h2 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#000', margin: '1.4rem 0 0.5rem' }}>1. Production Environments</h2>
+        <p style={{ fontSize: '1.3rem', color: '#666', margin: '0 0 1rem' }}>Production (Prod) · Disaster Recovery (DR) · Staging (Stg)</p>
+        <ReportDbTable rows={filledProd} haLabel="HA — Cross Region" />
+
+        {/* Non-production */}
+        <ReportSectionBanner num={2} title="NON-PRODUCTION DATABASES" />
+        <h2 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#000', margin: '1.4rem 0 0.5rem' }}>2. Non-Production Environments</h2>
+        <p style={{ fontSize: '1.3rem', color: '#666', margin: '0 0 1rem' }}>Development (Dev) · Test · QA</p>
+        <ReportDbTable rows={filledNonprod} haLabel="High Availability" />
+
+        {/* Persistence */}
+        <ReportSectionBanner num={3} title="DATA PERSISTENCE REQUIREMENTS" />
+        <h2 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#000', margin: '1.4rem 0 1rem' }}>3. Data Persistence</h2>
+        <ReportPersistenceTable prod={prodPersistence} nonprod={nonprodPersistence} />
+
+        {/* Notes */}
+        {notes && (
+          <>
+            <ReportSectionBanner num={4} title="ADDITIONAL NOTES" />
+            <div style={{ background: '#f9f9f9', borderLeft: '3px solid #FF6600', padding: '1.4rem 1.6rem', marginTop: '1.4rem' }}>
+              <p style={{ fontSize: '1.3rem', color: '#333', lineHeight: '1.65', margin: 0 }}>{notes}</p>
+            </div>
+          </>
+        )}
+
+        {/* Footer */}
+        <div style={{ marginTop: '4.8rem', paddingTop: '1.4rem', borderTop: '1px solid #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '1.1rem', color: '#999' }}>AceMQ · an ace8 company</span>
+          <span style={{ fontSize: '1.1rem', color: '#999' }}>Redis Enterprise Sizing Report · {date}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -533,7 +748,7 @@ export default function SizingTool() {
               ? 'shadow-[0_4px_48px_rgba(0,0,0,0.08)]'
               : 'shadow-[0_2px_40px_rgba(0,0,0,0.06)]'
           } ${
-            current.id === 'prod_databases' || current.id === 'nonprod_databases' || current.id === 'review'
+            current.id === 'prod_databases' || current.id === 'nonprod_databases' || current.id === 'review' || current.id === 'done'
               ? 'max-w-[76rem]'
               : 'max-w-[60rem]'
           }`}
@@ -787,46 +1002,29 @@ export default function SizingTool() {
             {/* ══════════ DONE ══════════ */}
             {current.id === 'done' && (
               <div>
-                <div className="w-[5.8rem] h-[5.8rem] bg-[#FF6600] rounded-full flex items-center justify-center text-white text-[2.4rem] mb-[2.2rem]">
-                  {'✓'}
+                <div className="no-print flex items-start gap-[1.6rem] mb-[0.4rem]">
+                  <div className="w-[4.8rem] h-[4.8rem] bg-[#FF6600] rounded-full flex items-center justify-center text-white text-[2rem] flex-shrink-0 mt-[0.4rem]">
+                    {'✓'}
+                  </div>
+                  <div>
+                    <h2 className="text-[2.8rem] font-[700] text-[#000000] mb-[0.5rem]">
+                      Sizing request submitted.
+                    </h2>
+                    <p className="text-[1.6rem] text-[#999999] leading-[1.65]">
+                      The AceMQ team will review your requirements and be in touch within 1–2 business
+                      days. Your sizing report is below — use the button to save or print it.
+                    </p>
+                  </div>
                 </div>
 
-                <h2 className="text-[3rem] font-[700] text-[#000000] mb-[1.2rem]">
-                  Sizing request submitted.
-                </h2>
-                <p className="text-[1.7rem] text-[#999999] leading-[1.75] mb-[2.8rem]">
-                  Thanks for providing these details. The AceMQ team will work with Redis to generate
-                  formal pricing and will be in contact within 1–2 business days.
-                </p>
-
-                <div className="bg-[#F5F5F5] border border-[rgba(0,0,0,0.06)] rounded-[1.2rem] p-[2.2rem] mb-[2.4rem]">
-                  <p className="text-[1.1rem] font-[400] tracking-[0.15em] uppercase text-[#FF6600] mb-[1.6rem]">
-                    Summary
-                  </p>
-                  {buildSummary().map((r) => (
-                    <div key={r.l} className="flex gap-[1.4rem] mb-[1rem] text-[1.4rem] items-start">
-                      <span className="text-[#999999] min-w-[16rem] flex-shrink-0">{r.l}</span>
-                      <span className="text-[#161616] font-[400] leading-[1.5]">{r.v}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-black text-white rounded-[2rem] px-[2.4rem] py-[2rem] flex items-start gap-[1.4rem]">
-                  <svg
-                    className="w-[2rem] h-[2rem] stroke-[#FF6600] fill-none flex-shrink-0 mt-[0.2rem]"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.59 3.41 2 2 0 0 1 3.56 1.25h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6 6l.87-.87a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2z" />
-                  </svg>
-                  <p className="text-[1.5rem] leading-[1.6] font-[400]">
-                    Expect a response within{' '}
-                    <span className="text-[#8FD5CC]">1–2 business days</span>. We&apos;ll reach out
-                    with pricing options.
-                  </p>
-                </div>
+                <SizingReport
+                  contact={contact}
+                  prodRows={prodRows}
+                  nonprodRows={nonprodRows}
+                  prodPersistence={prodPersistence}
+                  nonprodPersistence={nonprodPersistence}
+                  notes={notes}
+                />
               </div>
             )}
 

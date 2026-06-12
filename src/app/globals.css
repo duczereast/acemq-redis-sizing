@@ -50,3 +50,35 @@ body {
 .animate-fade-slide {
   animation: fadeSlide 0.3s ease both;
 }
+
+/* Print styles — show only the report */
+@media print {
+  nav,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  html {
+    font-size: 10px;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .grid-bg {
+    background-image: none !important;
+  }
+
+  #sizing-report {
+    margin-top: 0 !important;
+  }
+
+  #print-report {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+}

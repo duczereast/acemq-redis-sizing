@@ -134,19 +134,177 @@ async function submitToForm(contact, plainSummary, hutk, ipAddress) {
   }
 }
 
+// ─── Branded report HTML (email-safe inline styles) ─────────────────────────
+
+function buildReportHtml(contact, prodRows, nonprodRows, prodPersistence, nonprodPersistence, notes) {
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const name = [contact.first, contact.last].filter(Boolean).join(' ');
+  const company = contact.company || '—';
+  const LOGO = 'https://redis-sizing.acemq.com/redesign/logo.png';
+
+  const filledProd = prodRows.filter((r) => r.memory || r.name);
+  const filledNonprod = nonprodRows.filter((r) => r.memory || r.name);
+
+  const banner = (num, title) => `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+      <tr><td style="background:#FF6600;padding:9px 14px;">
+        <p style="margin:0;font-size:11px;color:#fff;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-family:'Helvetica Neue',Arial,sans-serif;">${num}.&nbsp;&nbsp;${title}</p>
+      </td></tr>
+    </table>`;
+
+  const dbTable = (rows, haLabel) => {
+    if (!rows.length) return '<p style="font-size:12px;color:#999;margin:8px 0 16px;font-family:\'Helvetica Neue\',Arial,sans-serif;">No databases entered.</p>';
+    const total = rows.reduce((s, r) => s + (parseFloat(r.memory) || 0), 0);
+    return `
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;margin-bottom:4px;">
+        <thead><tr>
+          <th style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Database Name</th>
+          <th style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Region / DC</th>
+          <th style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Peak Mem (GB)</th>
+          <th style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Throughput</th>
+          <th style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">${haLabel}</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr style="background:${i % 2 === 0 ? '#fff' : '#f9f9f9'};">
+              <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-family:'Helvetica Neue',Arial,sans-serif;">${r.name || '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-family:'Helvetica Neue',Arial,sans-serif;">${r.region || '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">${r.memory || '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-family:'Helvetica Neue',Arial,sans-serif;">${r.throughput || '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-family:'Helvetica Neue',Arial,sans-serif;">${r.ha || '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="background:#fff8f0;">
+          <td colspan="2" style="padding:7px 10px;font-size:11px;color:#FF6600;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Total Peak Memory</td>
+          <td style="padding:7px 10px;font-size:12px;color:#FF6600;font-weight:700;font-family:'Helvetica Neue',Arial,sans-serif;">${total} GB</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>`;
+  };
+
+  const allPersist = [
+    ...Object.entries(prodPersistence || {}).filter(([, v]) => v).map(([k, v]) => ({ group: 'Production', env: k, type: v })),
+    ...Object.entries(nonprodPersistence || {}).filter(([, v]) => v).map(([k, v]) => ({ group: 'Non-Production', env: k, type: v })),
+  ];
+
+  const persistTable = allPersist.length > 0 ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;margin-bottom:4px;">
+      <thead><tr>
+        <th width="28%" style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Group</th>
+        <th width="35%" style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Environment</th>
+        <th style="background:#1a1a1a;color:#fff;text-align:left;padding:8px 10px;font-size:11px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Persistence Type</th>
+      </tr></thead>
+      <tbody>
+        ${allPersist.map((e, i) => `
+          <tr style="background:${i % 2 === 0 ? '#fff' : '#f9f9f9'};">
+            <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#555;font-family:'Helvetica Neue',Arial,sans-serif;">${e.group}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-family:'Helvetica Neue',Arial,sans-serif;">${e.env}</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #ebebeb;color:#1a1a1a;font-family:'Helvetica Neue',Arial,sans-serif;">${e.type}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>` :
+    '<p style="font-size:12px;color:#999;margin:8px 0 16px;font-family:\'Helvetica Neue\',Arial,sans-serif;">No persistence requirements specified.</p>';
+
+  const detailRow = (label, value, bg, bold = false) =>
+    `<tr style="background:${bg};"><td style="padding:8px 12px;border-bottom:1px solid #ebebeb;color:#555555;font-family:'Helvetica Neue',Arial,sans-serif;">${label}</td><td style="padding:8px 12px;border-bottom:1px solid #ebebeb;color:#1a1a1a;${bold ? 'font-weight:600;' : ''}font-family:'Helvetica Neue',Arial,sans-serif;">${value}</td></tr>`;
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f0f0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f0f0;padding:24px 0;">
+<tr><td align="center">
+<table width="700" cellpadding="0" cellspacing="0" style="background:#ffffff;max-width:700px;width:100%;">
+<tr><td style="padding:48px 56px 56px;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+  <tr><td></td><td align="right" style="width:90px;"><img src="${LOGO}" height="20" alt="AceMQ" style="display:block;"></td></tr>
+</table>
+
+<img src="${LOGO}" height="40" alt="AceMQ" style="display:block;height:40px;margin-bottom:20px;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+  <tr><td style="background:#FF6600;height:2px;font-size:0;line-height:0;">&nbsp;</td></tr>
+</table>
+
+<p style="color:#FF6600;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px;font-family:'Helvetica Neue',Arial,sans-serif;">SIZING REFERENCE</p>
+<h1 style="font-size:26px;font-weight:700;color:#000000;line-height:1.25;margin:0 0 6px;font-family:'Helvetica Neue',Arial,sans-serif;">Redis Enterprise Sizing Report</h1>
+<p style="font-size:13px;color:#666666;margin:0 0 24px;font-family:'Helvetica Neue',Arial,sans-serif;">${company} &middot; Prepared by AceMQ &middot; ${date}</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+  <tr><td style="background:#FF6600;padding:10px 14px;">
+    <p style="margin:0;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-family:'Helvetica Neue',Arial,sans-serif;">
+      <span style="color:rgba(255,255,255,0.6);">REDIS ENTERPRISE SIZING &nbsp;&middot;&nbsp; </span><strong style="color:#ffffff;">SUBMITTED REPORT</strong><span style="color:rgba(255,255,255,0.6);"> &nbsp;&middot;&nbsp; Contact &middot; Production &middot; Non-Production &middot; Persistence</span>
+    </p>
+  </td></tr>
+</table>
+
+<h2 style="font-size:15px;font-weight:700;color:#000000;margin:0 0 10px;font-family:'Helvetica Neue',Arial,sans-serif;">Submission Details</h2>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-bottom:28px;">
+  <thead><tr>
+    <th width="35%" style="background:#1a1a1a;color:#fff;text-align:left;padding:9px 12px;font-size:12px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Document</th>
+    <th style="background:#1a1a1a;color:#fff;text-align:left;padding:9px 12px;font-size:12px;font-weight:600;font-family:'Helvetica Neue',Arial,sans-serif;">Detail</th>
+  </tr></thead>
+  <tbody>
+    ${detailRow('Title', 'Redis Enterprise Sizing Report', '#fff')}
+    ${detailRow('Prepared By', 'AceMQ — Redis Subject-Matter Engineering', '#fafafa')}
+    ${detailRow('Contact', name, '#fff')}
+    ${detailRow('Company', company, '#fafafa', true)}
+    ${detailRow('Role', contact.role || '—', '#fff')}
+    ${detailRow('Email', contact.email, '#fafafa')}
+    ${detailRow('Phone', contact.phone || '—', '#fff')}
+    ${detailRow('Date Submitted', date, '#fafafa')}
+    ${detailRow('Classification', 'Confidential — Prepared by AceMQ', '#fff')}
+  </tbody>
+</table>
+
+${banner('1', 'PRODUCTION DATABASES')}
+<h2 style="font-size:14px;font-weight:700;color:#000;margin:14px 0 6px;font-family:'Helvetica Neue',Arial,sans-serif;">1. Production Environments (Prod &middot; DR &middot; Staging)</h2>
+${dbTable(filledProd, 'HA — Cross Region')}
+
+${banner('2', 'NON-PRODUCTION DATABASES')}
+<h2 style="font-size:14px;font-weight:700;color:#000;margin:14px 0 6px;font-family:'Helvetica Neue',Arial,sans-serif;">2. Non-Production Environments (Dev &middot; Test &middot; QA)</h2>
+${dbTable(filledNonprod, 'High Availability')}
+
+${banner('3', 'DATA PERSISTENCE REQUIREMENTS')}
+<h2 style="font-size:14px;font-weight:700;color:#000;margin:14px 0 6px;font-family:'Helvetica Neue',Arial,sans-serif;">3. Data Persistence</h2>
+${persistTable}
+
+${notes ? `${banner('4', 'ADDITIONAL NOTES')}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;margin-bottom:4px;">
+  <tr><td style="background:#f9f9f9;border-left:3px solid #FF6600;padding:14px 16px;">
+    <p style="font-size:13px;color:#333333;line-height:1.65;margin:0;font-family:'Helvetica Neue',Arial,sans-serif;">${notes.replace(/\n/g, '<br>')}</p>
+  </td></tr>
+</table>` : ''}
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:48px;">
+  <tr>
+    <td style="border-top:1px solid #cccccc;padding-top:14px;font-size:11px;color:#999999;font-family:'Helvetica Neue',Arial,sans-serif;">AceMQ &middot; an ace8 company</td>
+    <td align="right" style="border-top:1px solid #cccccc;padding-top:14px;font-size:11px;color:#999999;font-family:'Helvetica Neue',Arial,sans-serif;">Redis Enterprise Sizing Report &middot; ${date}</td>
+  </tr>
+</table>
+
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
 // ─── Mailjet email notification ──────────────────────────────────────────────
 
-async function sendEmailNotification(contact, htmlBody) {
+async function sendEmailNotification(contact, reportHtml) {
   if (!MJ_KEY || !MJ_SECRET) {
     console.error('Mailjet keys missing');
     return;
   }
 
   const message = {
-    From: { Email: 'questionaire@acemq.com', Name: 'AceMQ Sizing Tool' },
-    To: [{ Email: 'submissions@acemq.com', Name: 'AceMQ Submissions' }],
-    Subject: `Redis Enterprise Sizing Request — ${contact.company || contact.email}`,
-    HTMLPart: htmlBody,
+    From: { Email: 'submissions@acemq.com', Name: 'AceMQ Sizing Tool' },
+    To: [{ Email: 'sales@acemq.com', Name: 'AceMQ Sales' }],
+    Subject: `Redis Enterprise Sizing Report — ${contact.company || contact.email}`,
+    HTMLPart: reportHtml,
   };
 
   const auth = Buffer.from(`${MJ_KEY}:${MJ_SECRET}`).toString('base64');
@@ -326,9 +484,10 @@ export async function POST(request) {
 
     // 5. Forms API + Email — run in parallel
     const plainSummary = buildPlainSummary(contact, prodRows, nonprodRows, prodPersistence, nonprodPersistence, notes);
+    const reportHtml = buildReportHtml(contact, prodRows, nonprodRows, prodPersistence, nonprodPersistence, notes);
     await Promise.allSettled([
       submitToForm(contact, plainSummary, hutk, ipAddress),
-      sendEmailNotification(contact, noteBody),
+      sendEmailNotification(contact, reportHtml),
     ]);
 
     return NextResponse.json({ ok: true });
